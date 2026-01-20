@@ -1,16 +1,10 @@
 const PaymentModel = require('../models/PaymentModel.cjs')
 const ServiceRecordModel = require('../models/ServiceRecordModel.cjs')
 const ServiceModel = require('../models/ServiceModel.cjs')
-const { default: UserModel } = require('../models/UserModel.cjs')
 
 exports.payment = async (req, res) => {
   try {
-    const {
-      ServiceRecordReference,
-      AmountPaid,
-      PaymentDate,
-      
-    } = req.body
+    const { ServiceRecordReference, AmountPaid, PaymentDate } = req.body
 
     if (!ServiceRecordReference)
       return res.status(400).json({ message: "No Reference inputed" })
@@ -18,7 +12,9 @@ exports.payment = async (req, res) => {
     if (AmountPaid === undefined)
       return res.status(400).json({ message: "No Amount inputed" })
 
-  
+    const parsedDate = PaymentDate ? new Date(PaymentDate) : new Date()
+    if (isNaN(parsedDate.getTime()))
+      return res.status(400).json({ message: "Invalid payment date" })
 
     const existingRecord = await ServiceRecordModel.findById(ServiceRecordReference)
     if (!existingRecord)
@@ -26,6 +22,9 @@ exports.payment = async (req, res) => {
 
     if (!existingRecord.StatusOfService)
       return res.status(400).json({ message: "Service is not approved yet" })
+
+    if (existingRecord.PaymentStatus)
+      return res.status(400).json({ message: "Service already paid" })
 
     const existingPayment = await PaymentModel.findOne({ ServiceRecordReference })
     if (existingPayment)
@@ -35,17 +34,23 @@ exports.payment = async (req, res) => {
     if (!service)
       return res.status(404).json({ message: "Service not found" })
 
+    if (AmountPaid < service.ServicePrice)
+      return res.status(400).json({ message: "Amount paid is less than service price" })
+
+    if (AmountPaid > service.ServicePrice)
+      return res.status(400).json({ message: "Amount paid exceeds service price" })
+
     const newPayment = new PaymentModel({
       ServiceRecordReference,
       ServiceName: service.ServiceName,
       ServicePrice: service.ServicePrice,
       AmountPaid,
-      PaymentDate,
-     
+      PaymentDate: parsedDate
     })
 
     await newPayment.save()
-    existingRecord.PaymentStatus=true
+
+    existingRecord.PaymentStatus = true
     await existingRecord.save()
 
     return res.status(201).json({
@@ -55,7 +60,7 @@ exports.payment = async (req, res) => {
     })
 
   } catch (err) {
-    return res.status(500).json({ message: "Server error", error: err.message })
+    return res.status(500).json({ message: "Server Error", error: err.message })
   }
 }
 
@@ -81,39 +86,39 @@ exports.generateBill = async (req, res) => {
     return res.status(200).json({
       bill: {
         PlateNumber: serviceRecord.PlateNumber,
+        FullName: serviceRecord.FullName,
         ServiceName: service.ServiceName,
         ServicePrice: service.ServicePrice,
         AmountPaid: payment.AmountPaid,
-        RecipientName: payment.RecipientName,
-        PaymentDate: payment.PaymentDate
+        PaymentDate: payment.PaymentDate,
+        PaymentId: payment._id
       }
     })
 
   } catch (err) {
-    return res.status(500).json({ message: "Server Error", err })
+    return res.status(500).json({ message: "Server Error", error: err.message })
   }
 }
+
 exports.getPaymentId = async (req, res) => {
   try {
     const { ServiceRecordId } = req.body
 
-    if (!ServiceRecordId) {
+    if (!ServiceRecordId)
       return res.status(400).json({ message: "ServiceRecordId is required" })
-    }
 
     const payment = await PaymentModel.findOne({
       ServiceRecordReference: ServiceRecordId
     })
 
-    if (!payment) {
+    if (!payment)
       return res.status(404).json({ message: "Payment not found for this service record" })
-    }
 
     return res.status(200).json({
       paymentId: payment._id
     })
 
   } catch (err) {
-    return res.status(500).json({ message: "Server Error", err })
+    return res.status(500).json({ message: "Server Error", error: err.message })
   }
 }
