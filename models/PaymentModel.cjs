@@ -4,8 +4,9 @@ const paymentModel= new mongoose.Schema({
     ServiceName:{type:String,required:true},
     ServicePrice:{type:Number,required:true},
     AmountPaid:{type:Number, required: true},
-    PaymentDate:{type:Date, required:true},
+    PaymentDate:{type:String, required:true},
     
 })
 const PaymentModel= mongoose.model('Payments',paymentModel)
 module.exports= PaymentModel;
+
